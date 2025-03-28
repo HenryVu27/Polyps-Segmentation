@@ -3,12 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from config import *
 
-#################################################
-# Common Blocks and Utilities
-#################################################
-
 class ConvBlock(nn.Module):
-    """Basic convolutional block with batch normalization and ReLU activation"""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.conv = nn.Sequential(
@@ -24,7 +19,6 @@ class ConvBlock(nn.Module):
         return self.conv(x)
 
 class AttentionGate(nn.Module):
-    """Attention Gate for Attention UNet"""
     def __init__(self, F_g, F_l, F_int):
         super().__init__()
         self.W_g = nn.Sequential(
@@ -52,18 +46,12 @@ class AttentionGate(nn.Module):
         psi = self.psi(psi)
         return x * psi
 
-#################################################
 # Original UNet
-#################################################
-
 class OriginalUNet(nn.Module):
-    """
-    Original UNet architecture with explicit layer definitions
-    """
     def __init__(self):
         super().__init__()
         
-        # Encoder (downsampling path)
+        # Encoder
         self.enc1 = ConvBlock(CHANNELS, FILTERS_ROOT)
         self.enc2 = ConvBlock(FILTERS_ROOT, FILTERS_ROOT * 2)
         self.enc3 = ConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT * 4)
@@ -72,7 +60,7 @@ class OriginalUNet(nn.Module):
         # Bottleneck
         self.bottleneck = ConvBlock(FILTERS_ROOT * 8, FILTERS_ROOT * 16)
         
-        # Decoder (upsampling path)
+        # Decoder
         self.up4 = nn.ConvTranspose2d(FILTERS_ROOT * 16, FILTERS_ROOT * 8, kernel_size=2, stride=2)
         self.dec4 = ConvBlock(FILTERS_ROOT * 16, FILTERS_ROOT * 8)
         
@@ -85,10 +73,9 @@ class OriginalUNet(nn.Module):
         self.up1 = nn.ConvTranspose2d(FILTERS_ROOT * 2, FILTERS_ROOT, kernel_size=2, stride=2)
         self.dec1 = ConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT)
         
-        # Output layer
+        # Output
         self.out = nn.Conv2d(FILTERS_ROOT, MASK_CHANNELS, kernel_size=1)
         
-        # Max pooling
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
     def forward(self, x):
@@ -108,7 +95,7 @@ class OriginalUNet(nn.Module):
         # Bottleneck
         b = self.bottleneck(p4)
         
-        # Decoder with skip connections
+        # Decoder
         d4 = self.up4(b)
         d4 = torch.cat([e4, d4], dim=1)
         d4 = self.dec4(d4)
@@ -129,15 +116,9 @@ class OriginalUNet(nn.Module):
         out = self.out(d1)
         return torch.sigmoid(out)
 
-#################################################
 # Attention UNet
-#################################################
-
+# Paper: https://arxiv.org/abs/1804.03999
 class AttentionUNet(nn.Module):
-    """
-    Attention UNet for Medical Image Segmentation
-    Paper: https://arxiv.org/abs/1804.03999
-    """
     def __init__(self):
         super().__init__()
         
@@ -150,12 +131,12 @@ class AttentionUNet(nn.Module):
         # Bottleneck
         self.bottleneck = ConvBlock(FILTERS_ROOT * 8, FILTERS_ROOT * 16)
         
-        # Attention gates
+        # Attention
         self.att1 = AttentionGate(F_g=FILTERS_ROOT * 8, F_l=FILTERS_ROOT * 8, F_int=FILTERS_ROOT * 4)
         self.att2 = AttentionGate(F_g=FILTERS_ROOT * 4, F_l=FILTERS_ROOT * 4, F_int=FILTERS_ROOT * 2)
         self.att3 = AttentionGate(F_g=FILTERS_ROOT * 2, F_l=FILTERS_ROOT * 2, F_int=FILTERS_ROOT)
         
-        # Decoder (upsampling) with attention
+        # Decoder with attention
         self.up4 = nn.ConvTranspose2d(FILTERS_ROOT * 16, FILTERS_ROOT * 8, kernel_size=2, stride=2)
         self.dec4 = ConvBlock(FILTERS_ROOT * 16, FILTERS_ROOT * 8)
         
@@ -168,7 +149,7 @@ class AttentionUNet(nn.Module):
         self.up1 = nn.ConvTranspose2d(FILTERS_ROOT * 2, FILTERS_ROOT, kernel_size=2, stride=2)
         self.dec1 = ConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT)
         
-        # Output layer
+        # Output
         self.out = nn.Conv2d(FILTERS_ROOT, MASK_CHANNELS, kernel_size=1)
         
         # Max pooling
@@ -192,25 +173,21 @@ class AttentionUNet(nn.Module):
         b = self.bottleneck(p4)
         
         # Decoder with attention
-        # Level 4
         d4 = self.up4(b)
         e4 = self.att1(g=d4, x=e4)
         d4 = torch.cat([e4, d4], dim=1)
         d4 = self.dec4(d4)
         
-        # Level 3
         d3 = self.up3(d4)
         e3 = self.att2(g=d3, x=e3)
         d3 = torch.cat([e3, d3], dim=1)
         d3 = self.dec3(d3)
         
-        # Level 2
         d2 = self.up2(d3)
         e2 = self.att3(g=d2, x=e2)
         d2 = torch.cat([e2, d2], dim=1)
         d2 = self.dec2(d2)
         
-        # Level 1
         d1 = self.up1(d2)
         d1 = torch.cat([e1, d1], dim=1)
         d1 = self.dec1(d1)
@@ -219,15 +196,9 @@ class AttentionUNet(nn.Module):
         out = self.out(d1)
         return torch.sigmoid(out)
 
-#################################################
 # nnUNet-inspired Architecture
-#################################################
-
+# Inspired by: https://arxiv.org/abs/1809.10486
 class NNUNetConvBlock(nn.Module):
-    """
-    Basic building block for nnUNet inspired architecture
-    Uses instance normalization instead of batch normalization
-    """
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=1)
@@ -246,14 +217,10 @@ class NNUNetConvBlock(nn.Module):
         return x
 
 class NNUNet(nn.Module):
-    """
-    Simplified version of nnUNet architecture
-    Inspired by: https://arxiv.org/abs/1809.10486
-    """
     def __init__(self):
         super().__init__()
         
-        # Encoder (downsampling path)
+        # Encoder
         self.enc1 = NNUNetConvBlock(CHANNELS, FILTERS_ROOT)
         self.enc2 = NNUNetConvBlock(FILTERS_ROOT, FILTERS_ROOT * 2)
         self.enc3 = NNUNetConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT * 4)
@@ -263,7 +230,7 @@ class NNUNet(nn.Module):
         # Pooling
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
-        # Decoder (upsampling path)
+        # Decoder
         self.up4 = nn.ConvTranspose2d(FILTERS_ROOT * 16, FILTERS_ROOT * 8, kernel_size=2, stride=2)
         self.dec4 = NNUNetConvBlock(FILTERS_ROOT * 16, FILTERS_ROOT * 8)
         
@@ -298,7 +265,7 @@ class NNUNet(nn.Module):
         x4 = self.enc4(self.pool(x3))
         x5 = self.enc5(self.pool(x4))
         
-        # Decoder with skip connections
+        # Decoder
         d4 = self.up4(x5)
         d4 = torch.cat([x4, d4], dim=1)
         d4 = self.dec4(d4)
@@ -318,7 +285,7 @@ class NNUNet(nn.Module):
         # Output
         output = torch.sigmoid(self.output(d1))
         
-        # Deep supervision for training (optional)
+        # Deep supervision for training
         if return_deep_supervision:
             ds1 = torch.sigmoid(self.ds1(d1))
             ds2 = torch.sigmoid(self.ds2(d2))
