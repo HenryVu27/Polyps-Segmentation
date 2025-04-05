@@ -57,7 +57,6 @@ class OriginalUNet(nn.Module):
         self.enc3 = ConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT * 4)
         self.enc4 = ConvBlock(FILTERS_ROOT * 4, FILTERS_ROOT * 8)
         
-        # Bottleneck
         self.bottleneck = ConvBlock(FILTERS_ROOT * 8, FILTERS_ROOT * 16)
         
         # Decoder
@@ -79,7 +78,7 @@ class OriginalUNet(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
     def forward(self, x):
-        # Encoder
+        # encoder
         e1 = self.enc1(x)
         p1 = self.pool(e1)
         
@@ -92,7 +91,6 @@ class OriginalUNet(nn.Module):
         e4 = self.enc4(p3)
         p4 = self.pool(e4)
         
-        # Bottleneck
         b = self.bottleneck(p4)
         
         # Decoder
@@ -112,7 +110,7 @@ class OriginalUNet(nn.Module):
         d1 = torch.cat([e1, d1], dim=1)
         d1 = self.dec1(d1)
         
-        # Output
+        # output
         out = self.out(d1)
         return torch.sigmoid(out)
 
@@ -122,13 +120,12 @@ class AttentionUNet(nn.Module):
     def __init__(self):
         super().__init__()
         
-        # Encoder (downsampling)
+        # downsampling
         self.enc1 = ConvBlock(CHANNELS, FILTERS_ROOT)
         self.enc2 = ConvBlock(FILTERS_ROOT, FILTERS_ROOT * 2)
         self.enc3 = ConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT * 4)
         self.enc4 = ConvBlock(FILTERS_ROOT * 4, FILTERS_ROOT * 8)
         
-        # Bottleneck
         self.bottleneck = ConvBlock(FILTERS_ROOT * 8, FILTERS_ROOT * 16)
         
         # Attention
@@ -151,12 +148,10 @@ class AttentionUNet(nn.Module):
         
         # Output
         self.out = nn.Conv2d(FILTERS_ROOT, MASK_CHANNELS, kernel_size=1)
-        
-        # Max pooling
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
     def forward(self, x):
-        # Encoder
+        # encoder
         e1 = self.enc1(x)
         p1 = self.pool(e1)
         
@@ -169,7 +164,6 @@ class AttentionUNet(nn.Module):
         e4 = self.enc4(p3)
         p4 = self.pool(e4)
         
-        # Bottleneck
         b = self.bottleneck(p4)
         
         # Decoder with attention
@@ -192,7 +186,7 @@ class AttentionUNet(nn.Module):
         d1 = torch.cat([e1, d1], dim=1)
         d1 = self.dec1(d1)
         
-        # Output
+        # output
         out = self.out(d1)
         return torch.sigmoid(out)
 
@@ -227,7 +221,6 @@ class NNUNet(nn.Module):
         self.enc4 = NNUNetConvBlock(FILTERS_ROOT * 4, FILTERS_ROOT * 8)
         self.enc5 = NNUNetConvBlock(FILTERS_ROOT * 8, FILTERS_ROOT * 16)
         
-        # Pooling
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
         # Decoder
@@ -243,7 +236,7 @@ class NNUNet(nn.Module):
         self.up1 = nn.ConvTranspose2d(FILTERS_ROOT * 2, FILTERS_ROOT, kernel_size=2, stride=2)
         self.dec1 = NNUNetConvBlock(FILTERS_ROOT * 2, FILTERS_ROOT)
         
-        # Deep supervision outputs
+        # deep supervision
         self.ds1 = nn.Conv2d(FILTERS_ROOT, MASK_CHANNELS, kernel_size=1)
         self.ds2 = nn.Sequential(
             nn.Conv2d(FILTERS_ROOT * 2, MASK_CHANNELS, kernel_size=1),
@@ -254,11 +247,11 @@ class NNUNet(nn.Module):
             nn.Upsample(scale_factor=4, mode='bilinear', align_corners=True)
         )
         
-        # Final output
+        # output
         self.output = nn.Conv2d(FILTERS_ROOT, MASK_CHANNELS, kernel_size=1)
         
     def forward(self, x, return_deep_supervision=False):
-        # Encoder
+        # encoder
         x1 = self.enc1(x)
         x2 = self.enc2(self.pool(x1))
         x3 = self.enc3(self.pool(x2))
@@ -282,7 +275,7 @@ class NNUNet(nn.Module):
         d1 = torch.cat([x1, d1], dim=1)
         d1 = self.dec1(d1)
         
-        # Output
+        # output
         output = torch.sigmoid(self.output(d1))
         
         # Deep supervision for training
@@ -303,18 +296,18 @@ class BCEDiceLoss(nn.Module):
         self.bce = nn.BCELoss()
         
     def forward(self, pred, target):
-        # For deep supervision
+        # for deep supervision
         if isinstance(pred, tuple) and len(pred) > 1:
             main_pred = pred[0]
             aux_preds = pred[1]
             loss = self._compute_loss(main_pred, target)
             
-            # Add auxiliary losses
+            # ddd auxiliary losses
             for aux_pred in aux_preds:
                 loss += 0.5 * self._compute_loss(aux_pred, target)
             return loss
         
-        # Regular prediction
+        # regular prediction
         return self._compute_loss(pred, target)
     
     def _compute_loss(self, pred, target):
