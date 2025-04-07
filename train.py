@@ -5,9 +5,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from config import *
 import os
+import wandb
+import 
 from tqdm.auto import tqdm
 
-def train_model(model, train_loader, val_loader, device, output_dir, num_epochs=EPOCHS):
+def train_model(model, train_loader, val_loader, device, output_dir, num_epochs=EPOCHS, project_name, run_name=None):
+    # initialize wandb
+    wandb.init(project=project_name, name=run_name, config={
+        "learning_rate": LEARNING_RATE,
+        "epochs": num_epochs,
+        "batch_size": BATCH_SIZE,
+        "model_type": model.__class__.__name__,
+        "optimizer": "Adam",
+        "scheduler": "ReduceLROnPlateau",
+        "loss_function": "BCELoss",
+        "image_size": IMAGE_SIZE,
+        "device": device
+    })
+    wandb.watch(model, log="all", log_freq=100)
+
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
@@ -15,6 +31,7 @@ def train_model(model, train_loader, val_loader, device, output_dir, num_epochs=
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
+    
     epoch_pbar = tqdm(range(num_epochs), desc="Training", unit="epoch")
     for epoch in epoch_pbar:
         model.train()

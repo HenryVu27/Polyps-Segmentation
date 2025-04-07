@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import cv2
 import torchvision.transforms.functional as TF
+from PIL import ImageFilter
 from config import *
 import random
 
@@ -157,7 +158,7 @@ class BUSIDataset(Dataset):
             # Convert to PIL for Gaussian blur
             image_pil = TF.to_pil_image(image)
             blur_radius = random.uniform(0, 1.5)
-            image_pil = image_pil.filter(radius=blur_radius)
+            image_pil = image_pil.filter(ImageFilter.GaussianBlur(radius=blur_radius))
             image = TF.to_tensor(image_pil)
         
         # Add simulated ultrasound shadow artifact
