@@ -290,7 +290,7 @@ class NNUNet(nn.Module):
 
 # Loss (BCE + Dice)
 class BCEDiceLoss(nn.Module):
-    def __init__(self, weight=0.5):
+    def __init__(self, weight=0.7):
         super().__init__()
         self.weight = weight
         self.bce = nn.BCELoss()
@@ -312,10 +312,13 @@ class BCEDiceLoss(nn.Module):
     
     def _compute_loss(self, pred, target):
         bce_loss = self.bce(pred, target)
-        smooth = 1e-5
+        smooth = 1e-1
         intersection = torch.sum(pred * target)
         union = torch.sum(pred) + torch.sum(target)
-        dice_loss = 1.0 - (2.0 * intersection + smooth) / (union + smooth)
+        if torch.sum(target) < smooth and torch.sum(pred) < smooth:  # when both masks are empty
+            dice_loss = 0.0
+        else:
+            dice_loss = 1.0 - (2.0 * intersection + smooth) / (union + smooth)
         return self.weight * bce_loss + (1 - self.weight) * dice_loss
     
 # U-Net factory
